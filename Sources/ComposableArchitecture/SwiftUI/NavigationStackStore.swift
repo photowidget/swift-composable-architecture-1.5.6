@@ -1,5 +1,7 @@
 import OrderedCollections
 import SwiftUI
+import SwiftUIBackport
+import Combine
 
 /// A navigation stack that is driven by a store.
 ///
@@ -8,7 +10,6 @@ import SwiftUI
 ///
 /// See the dedicated article on <doc:Navigation> for more information on the library's navigation
 /// tools, and in particular see <doc:StackBasedNavigation> for information on using this view.
-@available(iOS 16, macOS 13, tvOS 16, watchOS 9, *)
 public struct NavigationStackStore<State, Action, Root: View, Destination: View>: View {
   private let root: Root
   private let destination: (Component<State>) -> Destination
@@ -94,9 +95,11 @@ public struct NavigationStackStore<State, Action, Root: View, Destination: View>
   }
 
   public var body: some View {
-    NavigationStack(
+      // 원본의 TCA와 다르게, NavigationStack2로 대체하여, SwiftUIBackport.NavigationController를 사용하게 된다.
+      // 이를 통하여, UIKit도 동시지원 가능 함.
+    NavigationStack2(
       path: self.viewStore.binding(
-        get: { $0.path },
+        get: { $0.path.map { $0 } },
         compactSend: { newPath in
           if newPath.count > self.viewStore.path.count, let component = newPath.last {
             return .push(id: component.id, state: component.element)
@@ -110,7 +113,7 @@ public struct NavigationStackStore<State, Action, Root: View, Destination: View>
     ) {
       self.root
         .environment(\.navigationDestinationType, State.self)
-        .navigationDestination(for: Component<State>.self) { component in
+        .navigationDestination2(for: Component<State>.self) { component in
           NavigationDestinationView(component: component, destination: self.destination)
         }
     }
@@ -231,15 +234,15 @@ private struct NavigationDestinationView<State, Destination: View>: View {
   }
 }
 
-private struct Component<Element>: Hashable {
+public struct Component<Element>: Hashable {
   let id: StackElementID
   var element: Element
 
-  static func == (lhs: Self, rhs: Self) -> Bool {
+  public static func == (lhs: Self, rhs: Self) -> Bool {
     lhs.id == rhs.id
   }
 
-  func hash(into hasher: inout Hasher) {
+  public func hash(into hasher: inout Hasher) {
     hasher.combine(self.id)
   }
 }
@@ -310,5 +313,79 @@ extension EnvironmentValues {
   fileprivate var navigationDestinationType: Any.Type? {
     get { self[NavigationDestinationTypeKey.self] }
     set { self[NavigationDestinationTypeKey.self] = newValue }
+  }
+}
+
+// MARK: - UIKit
+
+/// PhotoWidgetPackage.SwiftUIBackport.NavigationController에 StackStore를 추가하여 UIKit에서 사용 할 수 있도록 함.
+public final class NavigationStackStoreController<
+  State,
+  Action,
+  Destination: View
+>: NavigationController<Component<State>, EmptyView> {
+  private let viewStore: ViewStore<StackState<State>, StackAction<State, Action>>
+  private var subs: Set<AnyCancellable> = []
+  
+  /// Creates a navigation controller with a store of stack state and actions.
+  ///
+  /// - Parameters:
+  ///   - path: A store of stack state and actions to power this stack.
+  ///   - rootViewController: The view controller to display when the stack is empty.
+  ///   - destination: A view builder that defines a view to display when an element is appended to
+  ///     the stack's state. The closure takes one argument, which is a store of the value to
+  ///     present.
+  public init<D: View>(
+    _ store: Store<StackState<State>, StackAction<State, Action>>,
+    rootViewController: UIViewController,
+    @ViewBuilder destination: @escaping (State) -> D
+  ) where Destination == SwitchStore<State, Action, D> {
+    self.viewStore = ViewStore(
+        store, 
+        observe: { $0 },
+      removeDuplicates: { areOrderedSetsDuplicates($0.ids, $1.ids) }
+    )
+    super.init(rootViewController: rootViewController)
+    
+    destinationHolder.addDestination { (component: Component<State>) in
+        var element = component.element
+      return SwitchStore(
+        store
+            .scope(
+              id: store.id(state: \.[id:component.id]!, action: \.[id:component.id]),
+              state: ToState {
+                element = $0[id: component.id] ?? element
+                return element
+              },
+              action: { .element(id: component.id, action: $0) },
+              isInvalid: { !$0.ids.contains(component.id) }
+            )
+      ) { _ in
+        destination(component.element)
+      }
+    }
+  }
+  
+  required init?(coder aDecoder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+  
+  public override func viewDidLoad() {
+    super.viewDidLoad()
+    
+    viewStore.publisher.sink { [weak self] stackState in
+      self?.updateQueue.send(stackState.path.map { $0 })
+    }
+    .store(in: &subs)
+    
+    Task { @MainActor in
+      for await data in dataStream {
+        if data.count > self.viewStore.path.count, let component = data.last {
+          viewStore.send(.push(id: component.id, state: component.element))
+        } else if !viewStore.path.isEmpty {
+          viewStore.send(.popFrom(id: self.viewStore.path[data.count].id))
+        }
+      }
+    }
   }
 }
