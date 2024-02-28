@@ -267,7 +267,11 @@ extension StackState {
     var endIndex: Int { self.base.endIndex }
     func index(after i: Int) -> Int { self.base.index(after: i) }
     func index(before i: Int) -> Int { self.base.index(before: i) }
-
+      
+    subscript(safe index: Int) -> Component<Element>? {
+        self.base.indices ~= index ? self[index] : nil
+    }
+      
     subscript(position: Int) -> Component<Element> {
       _read {
         yield Component(id: self.base.ids[position], element: self.base[position])
