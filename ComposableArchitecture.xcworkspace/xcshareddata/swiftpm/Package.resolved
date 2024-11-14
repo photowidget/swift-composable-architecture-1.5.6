@@ -10,15 +10,6 @@
       }
     },
     {
-      "identity" : "foundationbackport",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/photowidget/FoundationBackport.git",
-      "state" : {
-        "branch" : "main",
-        "revision" : "7c1aa8e5affd502809e1200b4f2114b046478e38"
-      }
-    },
-    {
       "identity" : "swift-argument-parser",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-argument-parser",
@@ -154,30 +145,12 @@
       }
     },
     {
-      "identity" : "swiftui-introspect",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/siteline/SwiftUI-Introspect.git",
-      "state" : {
-        "revision" : "121c146fe591b1320238d054ae35c81ffa45f45a",
-        "version" : "0.12.0"
-      }
-    },
-    {
       "identity" : "swiftui-navigation",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swiftui-navigation.git",
       "state" : {
         "revision" : "a3aa5d46e8bf174d773d23b030f1c103999398ac",
         "version" : "1.1.0"
-      }
-    },
-    {
-      "identity" : "swiftuibackport",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/photowidget/SwiftUIBackport",
-      "state" : {
-        "branch" : "main",
-        "revision" : "f6dbb03b0157ac34ef8261f4a3399c65247cd09f"
       }
     },
     {
